@@ -1,7 +1,7 @@
 package lexer
 
 import (
-	"github.com/unicodesnowman/monkey/token"
+	"github.com/unicodesnowman/writing_an_interpreter_in_go/token"
 )
 
 // TODO handle line numbers of errors via

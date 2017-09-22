@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/unicodesnowman/monkey/lexer"
-	"github.com/unicodesnowman/monkey/token"
+	"github.com/unicodesnowman/writing_an_interpreter_in_go/lexer"
+	"github.com/unicodesnowman/writing_an_interpreter_in_go/token"
 )
 
 const PROMPT = ">> "
