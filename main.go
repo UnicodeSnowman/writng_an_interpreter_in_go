@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/unicodesnowman/monkey/repl"
+	"github.com/unicodesnowman/writing_an_interpreter_in_go/repl"
 )
 
 func main() {

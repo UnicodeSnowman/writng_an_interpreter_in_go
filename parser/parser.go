@@ -2,24 +2,55 @@ package parser
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/unicodesnowman/writing_an_interpreter_in_go/ast"
 	"github.com/unicodesnowman/writing_an_interpreter_in_go/lexer"
 	"github.com/unicodesnowman/writing_an_interpreter_in_go/token"
 )
 
-type Parser struct {
-	l *lexer.Lexer
+const (
+	_ int = iota
+	LOWEST
+	EQUALS
+	LESSGREATER
+	SUM
+	PRODUCT
+	PREFIX
+	CALL
+)
 
-	errors       []string
+type (
+	prefixParseFn func() ast.Expression
+	infixParseFn  func(ast.Expression) ast.Expression
+)
+
+type Parser struct {
+	l      *lexer.Lexer
+	errors []string
+
 	currentToken token.Token
 	peekToken    token.Token
+
+	prefixParseFns map[token.TokenType]prefixParseFn
+	infixParseFns  map[token.TokenType]infixParseFn
 }
 
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
 		l:      l,
 		errors: []string{},
+	}
+
+	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
+	p.registerPrefix(token.IDENT, p.parseIdentifier)
+	p.registerPrefix(token.INT, p.parseIntegerLiteral)
+
+	for _, tt := range []token.TokenType{
+		token.BANG,
+		token.MINUS,
+	} {
+		p.registerPrefix(tt, p.parsePrefixExpression)
 	}
 
 	// Read two tokens, so currentToken and peekToken are both set
@@ -41,9 +72,90 @@ func (p *Parser) parseStatement() ast.Statement {
 	switch p.currentToken.Type {
 	case token.LET:
 		return p.parseLetStatement()
+	case token.RETURN:
+		return p.parseReturnStatement()
 	default:
+		return p.parseExpressionStatement()
+	}
+}
+
+func (p *Parser) parsePrefixExpression() ast.Expression {
+	prefixExpression := &ast.PrefixExpression{
+		Token:    p.currentToken,
+		Operator: p.currentToken.Literal,
+	}
+
+	p.nextToken()
+
+	prefixExpression.Right = p.parseExpression(PREFIX)
+
+	return prefixExpression
+}
+
+func (p *Parser) parseIdentifier() ast.Expression {
+	return &ast.Identifier{Token: p.currentToken, Value: p.currentToken.Literal}
+}
+
+func (p *Parser) parseIntegerLiteral() ast.Expression {
+	lit := &ast.IntegerLiteral{Token: p.currentToken}
+
+	value, err := strconv.ParseInt(p.currentToken.Literal, 0, 64)
+	if err != nil {
+		msg := fmt.Sprintf("could not parse %q as integer", p.currentToken.Literal)
+		p.errors = append(p.errors, msg)
 		return nil
 	}
+
+	lit.Value = value
+
+	return lit
+}
+
+func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.currentToken}
+	stmt.Expression = p.parseExpression(LOWEST)
+
+	for !p.currentTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) noPrefixParseFnError(t token.TokenType) {
+	msg := fmt.Sprintf("no prefix parse function for %s found", t)
+	p.errors = append(p.errors, msg)
+}
+
+func (p *Parser) parseExpression(precedence int) ast.Expression {
+	prefix := p.prefixParseFns[p.currentToken.Type]
+	if prefix == nil {
+		p.noPrefixParseFnError(p.currentToken.Type)
+		return nil
+	}
+	return prefix()
+}
+
+func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
+	stmt := &ast.ReturnStatement{Token: p.currentToken}
+
+	p.nextToken()
+
+	// TODO handle expressions, skipping until
+	// semicolon for now
+	for !p.currentTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
+	p.prefixParseFns[tokenType] = fn
+}
+
+func (p *Parser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
+	p.infixParseFns[tokenType] = fn
 }
 
 func (p *Parser) parseLetStatement() *ast.LetStatement {
