@@ -25,6 +25,17 @@ type (
 	infixParseFn  func(ast.Expression) ast.Expression
 )
 
+var precedences = map[token.TokenType]int{
+	token.EQ:       EQUALS,
+	token.NOT_EQ:   EQUALS,
+	token.LT:       LESSGREATER,
+	token.GT:       LESSGREATER,
+	token.PLUS:     SUM,
+	token.MINUS:    SUM,
+	token.SLASH:    PRODUCT,
+	token.ASTERISK: PRODUCT,
+}
+
 type Parser struct {
 	l      *lexer.Lexer
 	errors []string
@@ -53,6 +64,21 @@ func New(l *lexer.Lexer) *Parser {
 		p.registerPrefix(tt, p.parsePrefixExpression)
 	}
 
+	p.infixParseFns = make(map[token.TokenType]infixParseFn)
+
+	for _, tt := range []token.TokenType{
+		token.PLUS,
+		token.MINUS,
+		token.SLASH,
+		token.ASTERISK,
+		token.EQ,
+		token.NOT_EQ,
+		token.LT,
+		token.GT,
+	} {
+		p.registerInfix(tt, p.parseInfixExpression)
+	}
+
 	// Read two tokens, so currentToken and peekToken are both set
 	//	p.nextToken()
 	//	p.nextToken()
@@ -68,6 +94,22 @@ func (p *Parser) nextToken() {
 	p.peekToken = p.l.NextToken()
 }
 
+func (p *Parser) peekPrecedence() int {
+	if p, ok := precedences[p.peekToken.Type]; ok {
+		return p
+	}
+
+	return LOWEST
+}
+
+func (p *Parser) currentPrecedence() int {
+	if p, ok := precedences[p.currentToken.Type]; ok {
+		return p
+	}
+
+	return LOWEST
+}
+
 func (p *Parser) parseStatement() ast.Statement {
 	switch p.currentToken.Type {
 	case token.LET:
@@ -77,6 +119,20 @@ func (p *Parser) parseStatement() ast.Statement {
 	default:
 		return p.parseExpressionStatement()
 	}
+}
+
+func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
+	expression := &ast.InfixExpression{
+		Token:    p.currentToken,
+		Left:     left,
+		Operator: p.currentToken.Literal,
+	}
+
+	precedence := p.currentPrecedence()
+	p.nextToken()
+	expression.Right = p.parseExpression(precedence)
+
+	return expression
 }
 
 func (p *Parser) parsePrefixExpression() ast.Expression {
@@ -115,7 +171,8 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	stmt := &ast.ExpressionStatement{Token: p.currentToken}
 	stmt.Expression = p.parseExpression(LOWEST)
 
-	for !p.currentTokenIs(token.SEMICOLON) {
+	// FIXME handle cases where missing semicolon causes infinite loop?
+	for !p.currentTokenIs(token.SEMICOLON) && !p.currentTokenIs(token.EOF) {
 		p.nextToken()
 	}
 
@@ -133,7 +190,20 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		p.noPrefixParseFnError(p.currentToken.Type)
 		return nil
 	}
-	return prefix()
+	leftExp := prefix()
+
+	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
+		infix := p.infixParseFns[p.peekToken.Type]
+		if infix == nil {
+			return leftExp
+		}
+
+		p.nextToken()
+
+		leftExp = infix(leftExp)
+	}
+
+	return leftExp
 }
 
 func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
@@ -141,8 +211,8 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 
 	p.nextToken()
 
-	// TODO handle expressions, skipping until
-	// semicolon for now
+	stmt.ReturnValue = p.parseExpression(LOWEST)
+
 	for !p.currentTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
@@ -180,6 +250,8 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 	// Advance
 	p.nextToken()
 
+	//stmt.Value = p.parseExpression(LOWEST)
+
 	// TODO handle expressions, skipping until
 	// semicolon for now
 	for !p.currentTokenIs(token.SEMICOLON) {
@@ -191,6 +263,10 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 
 func (p *Parser) currentTokenIs(t token.TokenType) bool {
 	return p.currentToken.Type == t
+}
+
+func (p *Parser) peekTokenIs(t token.TokenType) bool {
+	return p.peekToken.Type == t
 }
 
 func (p *Parser) expectPeek(t token.TokenType) bool {
