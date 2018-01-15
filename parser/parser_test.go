@@ -64,6 +64,42 @@ func TestIdentifierExpression(t *testing.T) {
 	}
 }
 
+func TestBooleanExpression(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{
+			"true;",
+			"true",
+		},
+		{
+			"false;",
+			"false",
+		},
+		{
+			"let foobar = true;",
+			"let foobar = true;",
+		},
+		{
+			"let barfoo = false;",
+			"let barfoo = false;",
+		},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		actual := program.String()
+		if actual != tt.expected {
+			t.Errorf("expected=%q, got=%q", tt.expected, actual)
+		}
+	}
+}
+
 func TestOperatorPrecedenceParsing(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -105,6 +141,42 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 			"3 + 4; -5 * 5",
 			"(3 + 4)((-5) * 5)",
 		},
+		{
+			"5 < 4 != 3 > 4",
+			"((5 < 4) != (3 > 4))",
+		},
+		{
+			"3 + 4 * 5 == 3 * 1 + 4 * 5",
+			"((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+		},
+		{
+			"3 > 5 == false",
+			"((3 > 5) == false)",
+		},
+		{
+			"3 < 5 == true",
+			"((3 < 5) == true)",
+		},
+		{
+			"1 + (2 + 3) + 4",
+			"((1 + (2 + 3)) + 4)",
+		},
+		{
+			"(5 + 5) * 2",
+			"((5 + 5) * 2)",
+		},
+		{
+			"2 / (5 + 5)",
+			"(2 / (5 + 5))",
+		},
+		{
+			"-(5 + 5)",
+			"(-(5 + 5))",
+		},
+		{
+			"!(true == true)",
+			"(!(true == true))",
+		},
 	}
 
 	for _, tt := range tests {
@@ -127,14 +199,18 @@ func TestParsingInfixExpressions(t *testing.T) {
 		operator   string
 		rightValue int64
 	}{
-		{"5 + 5;", 5, "+", 5},
-		{"5 - 5;", 5, "-", 5},
-		{"5 * 5;", 5, "*", 5},
-		{"5 / 5;", 5, "/", 5},
-		{"5 > 5;", 5, ">", 5},
-		{"5 < 5;", 5, "<", 5},
-		{"5 == 5;", 5, "==", 5},
-		{"5 != 5;", 5, "!=", 5},
+		{"5 + 5", 5, "+", 5},
+		{"5 - 5", 5, "-", 5},
+		{"5 * 5", 5, "*", 5},
+		{"5 / 5", 5, "/", 5},
+		{"5 > 5", 5, ">", 5},
+		{"5 < 5", 5, "<", 5},
+		{"5 == 5", 5, "==", 5},
+		{"5 != 5", 5, "!=", 5},
+		// TODO can also test boolean infix here, just need modified helper fns
+		// {"true == true", true, "==", true},
+		// {"true != false", true, "!=", false},
+		// {"false == false", false, "==", false},
 	}
 
 	for _, tt := range infixTests {
@@ -179,6 +255,10 @@ func TestParsingPrefixExpressions(t *testing.T) {
 	}{
 		{"!5;", "!", 5},
 		{"-15;", "-", 15},
+
+		// TODO can also test boolean infix here, just need modified helper fns
+		// {"!true;", "!", true},
+		// {"!false;", "!", false},
 	}
 
 	for _, tt := range prefixTests {
@@ -211,7 +291,6 @@ func TestParsingPrefixExpressions(t *testing.T) {
 }
 
 func TestReturnStatements(t *testing.T) {
-	// FIXME infinite loop if missing semicolon
 	input := `
 return 5;
 return 10;
@@ -242,7 +321,8 @@ return 993322;
 }
 
 func TestLetStatements(t *testing.T) {
-	// FIXME infinite loop if missing semicolon
+	// TODO should test that expression statement (i.e. right side of let statement)
+	// is correct
 	input := `
 	let x = 5;
 	let y = 10;
@@ -275,6 +355,110 @@ func TestLetStatements(t *testing.T) {
 		if !testLetStatement(t, stmt, tt.expectedIdentifier) {
 			return
 		}
+	}
+}
+
+func TestIfExpression(t *testing.T) {
+	input := `if (x < y) { x }`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("program.Body does not contain %d statements. got=%d\n", 1, len(program.Statements))
+	}
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.Statements[0] is not ast.ExpressionStatement, got=%T", program.Statements[0])
+	}
+
+	exp, ok := stmt.Expression.(*ast.IfExpression)
+	if !ok {
+		t.Fatalf("stmt.Expression is not ast.IfExpression, got=%T", stmt.Expression)
+	}
+
+	if exp.Condition.String() != "(x < y)" {
+		t.Fatalf("exp.Condition is incorrect, got=%s", exp.Condition.String())
+	}
+
+	if len(exp.Consequence.Statements) != 1 {
+		t.Fatalf("consequence is not 1 statements. got=%d\n", len(exp.Consequence.Statements))
+	}
+
+	consequence, ok := exp.Consequence.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("Statements[0] is not ast.ExpressionStatement. got=%T", exp.Consequence.Statements[0])
+	}
+
+	if consequence.Expression.String() != "x" {
+		t.Fatalf("consequence.Expression is incorrect, got=%s", consequence.Expression.String())
+	}
+
+	if exp.Alternative != nil {
+		t.Fatalf("exp.Alternative was not nil. got=%+v", exp.Alternative)
+	}
+}
+
+func TestIfElseExpression(t *testing.T) {
+	//input := `if (x < y) { x; } else { y }`
+	input := `if (x < y) {
+		x
+	} else {
+		y
+	}`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("program.Body does not contain %d statements. got=%d\n", 1, len(program.Statements))
+	}
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.Statements[0] is not ast.ExpressionStatement, got=%T", program.Statements[0])
+	}
+
+	exp, ok := stmt.Expression.(*ast.IfExpression)
+	if !ok {
+		t.Fatalf("stmt.Expression is not ast.IfExpression, got=%T", stmt.Expression)
+	}
+
+	if exp.Condition.String() != "(x < y)" {
+		t.Fatalf("exp.Condition is incorrect, got=%s", exp.Condition.String())
+	}
+
+	if len(exp.Consequence.Statements) != 1 {
+		t.Fatalf("consequence is not 1 statements. got=%d\n", len(exp.Consequence.Statements))
+	}
+
+	consequence, ok := exp.Consequence.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("Statements[0] is not ast.ExpressionStatement. got=%T", exp.Consequence.Statements[0])
+	}
+
+	if consequence.Expression.String() != "x" {
+		t.Fatalf("consequence.Expression is incorrect, got=%s", consequence.Expression.String())
+	}
+
+	if len(exp.Alternative.Statements) != 1 {
+		t.Errorf("exp.Alternative.Statements does not contain 1 statements. got=%d\n",
+			len(exp.Alternative.Statements))
+	}
+
+	alternative, ok := exp.Alternative.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("Statements[0] is not ast.ExpressionStatement. got=%T",
+			exp.Alternative.Statements[0])
+	}
+
+	if alternative.String() != "y" {
+		t.Fatalf("alternative is incorrect, got=%s", alternative.String())
 	}
 }
 
