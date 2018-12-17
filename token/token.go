@@ -3,8 +3,9 @@ package token
 const (
 	ILLEGAL   = "ILLEGAL"
 	EOF       = "EOF"
-	IDENT     = "IDENT" // add, foobar, x, y, ...
-	INT       = "INT"   // 12345
+	IDENT     = "IDENT"  // add, foobar, x, y, ...
+	INT       = "INT"    // 12345
+	STRING    = "STRING" // "foobar"
 	ASSIGN    = "="
 	PLUS      = "+"
 	MINUS     = "-"
@@ -17,10 +18,13 @@ const (
 	NOT_EQ    = "!="
 	COMMA     = ","
 	SEMICOLON = ";"
+	COLON     = ":"
 	LPAREN    = "("
 	RPAREN    = ")"
 	LBRACE    = "{"
 	RBRACE    = "}"
+	LBRACKET  = "["
+	RBRACKET  = "]"
 	FUNCTION  = "FUNCTION"
 	LET       = "LET"
 	TRUE      = "TRUE"

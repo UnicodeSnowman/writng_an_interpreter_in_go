@@ -6,8 +6,9 @@ import (
 	"io"
 	"os"
 
+	"github.com/unicodesnowman/writing_an_interpreter_in_go/evaluator"
 	"github.com/unicodesnowman/writing_an_interpreter_in_go/lexer"
-	"github.com/unicodesnowman/writing_an_interpreter_in_go/token"
+	"github.com/unicodesnowman/writing_an_interpreter_in_go/parser"
 )
 
 const PROMPT = ">> "
@@ -22,6 +23,8 @@ func Start(in io.Reader, out io.Writer) {
 
 	for {
 		fmt.Fprint(out, PROMPT)
+
+		// TODO support up/down arrow for scrolling through history
 		scanned := scanner.Scan()
 		if !scanned {
 			return
@@ -34,9 +37,24 @@ func Start(in io.Reader, out io.Writer) {
 		}
 
 		l := lexer.New(line)
+		p := parser.New(l)
 
-		for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {
-			fmt.Fprintf(out, "%+v\n", tok)
+		program := p.ParseProgram()
+		if len(p.Errors()) != 0 {
+			printParserErrors(out, p.Errors())
+			continue
 		}
+
+		evaluated := evaluator.Eval(program)
+		if evaluated != nil {
+			io.WriteString(out, evaluated.Inspect())
+			io.WriteString(out, "\n")
+		}
+	}
+}
+
+func printParserErrors(out io.Writer, errors []string) {
+	for _, msg := range errors {
+		io.WriteString(out, "\t"+msg+"\n")
 	}
 }

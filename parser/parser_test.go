@@ -29,10 +29,10 @@ func TestIntegerLiteralExpression(t *testing.T) {
 		t.Fatalf("exp not *ast.IntegerLiteral. got=%T", stmt.Expression)
 	}
 	if intLiteral.Value != 5 {
-		t.Errorf("intLiteral.Value not %s. got=%s", 5, intLiteral.Value)
+		t.Errorf("intLiteral.Value not %d. got=%d", 5, intLiteral.Value)
 	}
 	if intLiteral.TokenLiteral() != "5" {
-		t.Errorf("intLiteral.TokenLiteral() not %s. got=%s", 5, intLiteral.TokenLiteral())
+		t.Errorf("intLiteral.TokenLiteral() not %s. got=%s", "5", intLiteral.TokenLiteral())
 	}
 }
 
@@ -687,7 +687,7 @@ func testIntegerLiteral(t *testing.T, il ast.Expression, value int64) bool {
 	}
 
 	if integ.Value != value {
-		t.Errorf("integ.Value not %s. got=%s", value, integ.Value)
+		t.Errorf("integ.Value not %d. got=%d", value, integ.Value)
 		return false
 	}
 
