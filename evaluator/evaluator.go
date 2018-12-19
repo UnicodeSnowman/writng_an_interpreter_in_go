@@ -2,6 +2,7 @@ package evaluator
 
 import (
 	"fmt"
+
 	"github.com/unicodesnowman/writing_an_interpreter_in_go/ast"
 	"github.com/unicodesnowman/writing_an_interpreter_in_go/object"
 )
@@ -52,6 +53,21 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return val
 		}
 		env.Set(node.Name.Value, val)
+	case *ast.FunctionLiteral:
+		params := node.Parameters
+		body := node.Body
+		return &object.Function{Parameters: params, Env: env, Body: body}
+	case *ast.CallExpression:
+		function := Eval(node.Function, env)
+		if isError(function) {
+			return function
+		}
+		args := evalExpressions(node.Arguments, env)
+		if len(args) == 1 && isError(args[0]) {
+			return args[0]
+		}
+
+		return applyFunction(function, args)
 	case *ast.ReturnStatement:
 		val := Eval(node.ReturnValue, env)
 		if isError(val) {
@@ -197,6 +213,37 @@ func evalIfExpression(ie *ast.IfExpression, env *object.Environment) object.Obje
 	}
 
 	return NULL
+}
+
+func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Object {
+	result := make([]object.Object, 0, len(exps))
+	for _, e := range exps {
+		evaluated := Eval(e, env)
+		if isError(evaluated) {
+			return []object.Object{evaluated}
+		}
+		result = append(result, evaluated)
+	}
+	return result
+}
+
+func applyFunction(fn object.Object, args []object.Object) object.Object {
+	function, ok := fn.(*object.Function)
+	if !ok {
+		return newError("not a function: %s", fn.Type())
+	}
+
+	params := map[string]object.Object{}
+	for idx, param := range function.Parameters {
+		params[param.Value] = args[idx]
+	}
+
+	evaluated := Eval(function.Body, object.NewInnerEnvironment(function.Env, params))
+	if returnValue, ok := evaluated.(*object.ReturnValue); ok {
+		return returnValue.Value
+	}
+
+	return evaluated
 }
 
 func isTruthy(obj object.Object) bool {
