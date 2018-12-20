@@ -24,9 +24,71 @@ var builtins = map[string]*object.Builtin{
 			switch obj := args[0].(type) {
 			case *object.String:
 				return &object.Integer{Value: int64(len(obj.Value))}
+			case *object.Array:
+				return &object.Integer{Value: int64(len(obj.Elements))}
 			default:
-				return newError(fmt.Sprintf("argument to `len` not supported, got %s", obj.Type()))
+				return newError("argument to `len` not supported, got %s", obj.Type())
 			}
+		},
+	},
+	"first": {
+		Fn: func(args ...object.Object) object.Object {
+			numArgs := len(args)
+			if numArgs != 1 {
+				return newError(fmt.Sprintf("wrong number of arguments. got=%d, want=1", numArgs))
+			}
+
+			if args[0].Type() != object.ARRAY_OBJ {
+				return newError("argument to `first` must be ARRAY, got %s", args[0].Type())
+			}
+
+			arr := args[0].(*object.Array)
+			if len(arr.Elements) > 0 {
+				return arr.Elements[0]
+			}
+
+			return NULL
+		},
+	},
+	"last": {
+		Fn: func(args ...object.Object) object.Object {
+			numArgs := len(args)
+			if numArgs != 1 {
+				return newError(fmt.Sprintf("wrong number of arguments. got=%d, want=1", numArgs))
+			}
+
+			if args[0].Type() != object.ARRAY_OBJ {
+				return newError("argument to `last` must be ARRAY, got %s", args[0].Type())
+			}
+
+			arr := args[0].(*object.Array)
+			length := len(arr.Elements)
+			if length > 0 {
+				return arr.Elements[length-1]
+			}
+
+			return NULL
+		},
+	},
+	"push": {
+		Fn: func(args ...object.Object) object.Object {
+			numArgs := len(args)
+			if numArgs != 2 {
+				return newError(fmt.Sprintf("wrong number of arguments. got=%d, want=2", numArgs))
+			}
+
+			if args[0].Type() != object.ARRAY_OBJ {
+				return newError("first argument to `push` must be ARRAY, got %s", args[0].Type())
+			}
+
+			arr := args[0].(*object.Array)
+			length := len(arr.Elements)
+
+			newElements := make([]object.Object, length+1, length+1)
+			copy(newElements, arr.Elements)
+			newElements[length] = args[1]
+
+			return &object.Array{Elements: newElements}
 		},
 	},
 }
@@ -55,6 +117,34 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		}
 
 		return evalInfixExpression(node.Operator, left, right)
+	case *ast.IndexExpression:
+		left := Eval(node.Left, env)
+		if isError(left) {
+			return left
+		}
+
+		index := Eval(node.Index, env)
+		if isError(index) {
+			return index
+		}
+
+		switch {
+		case left.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
+			array := left.(*object.Array).Elements
+			index := index.(*object.Integer).Value
+			if index < 0 || index > int64(len(array)-1) {
+				return NULL
+			}
+			return array[index]
+		default:
+			return newError("index operator not supported: %s", left.Type())
+		}
+	case *ast.ArrayLiteral:
+		elements := evalExpressions(node.Elements, env)
+		if len(elements) == 1 && isError(elements[0]) {
+			return elements[0]
+		}
+		return &object.Array{Elements: elements}
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
 	case *ast.StringLiteral:

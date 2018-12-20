@@ -27,6 +27,7 @@ func Start(in io.Reader, out io.Writer) {
 		fmt.Fprint(out, PROMPT)
 
 		// TODO support up/down arrow for scrolling through history
+		// handle automatically via rlwrap?
 		scanned := scanner.Scan()
 		if !scanned {
 			return

@@ -459,6 +459,8 @@ func (p *Parser) parseIndexExpression(left ast.Expression) ast.Expression {
 		return nil
 	}
 
+	p.nextToken()
+
 	return exp
 }
 

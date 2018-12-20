@@ -14,6 +14,7 @@ const (
 	INTEGER_OBJ      = "INTEGER"
 	STRING_OBJ       = "STRING"
 	BOOLEAN_OBJ      = "BOOLEAN"
+	ARRAY_OBJ        = "ARRAY"
 	NULL_OBJ         = "NULL"
 	FUNCTION_OBJ     = "FUNCTION"
 	RETURN_VALUE_OBJ = "RETURN_VALUE"
@@ -22,6 +23,11 @@ const (
 )
 
 type BuiltinFunction func(args ...Object) Object
+
+type Object interface {
+	Type() ObjectType
+	Inspect() string
+}
 
 type Builtin struct {
 	Fn BuiltinFunction
@@ -35,9 +41,27 @@ func (b *Builtin) Inspect() string {
 	return "<native code>"
 }
 
-type Object interface {
-	Type() ObjectType
-	Inspect() string
+type Array struct {
+	Elements []Object
+}
+
+func (a *Array) Type() ObjectType {
+	return ARRAY_OBJ
+}
+
+func (a *Array) Inspect() string {
+	var out bytes.Buffer
+
+	elements := make([]string, 0, len(a.Elements))
+	for _, elem := range a.Elements {
+		elements = append(elements, elem.Inspect())
+	}
+
+	out.WriteString("[")
+	out.WriteString(strings.Join(elements, ", "))
+	out.WriteString("]")
+
+	return out.String()
 }
 
 type Integer struct {
