@@ -137,7 +137,13 @@ func (l *Lexer) readChar() {
 func (l *Lexer) readString() string {
 	position := l.position + 1
 	for {
+		lastChar := l.ch
 		l.readChar()
+		if lastChar == '\\' {
+			// keep going if escaping
+			continue
+		}
+
 		if l.ch == '"' || l.ch == 0 {
 			break
 		}
