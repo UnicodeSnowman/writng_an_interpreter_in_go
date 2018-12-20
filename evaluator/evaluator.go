@@ -13,6 +13,24 @@ var (
 	FALSE = &object.Boolean{Value: false}
 )
 
+var builtins = map[string]*object.Builtin{
+	"len": {
+		Fn: func(args ...object.Object) object.Object {
+			numArgs := len(args)
+			if numArgs != 1 {
+				return newError(fmt.Sprintf("wrong number of arguments. got=%d, want=1", numArgs))
+			}
+
+			switch obj := args[0].(type) {
+			case *object.String:
+				return &object.Integer{Value: int64(len(obj.Value))}
+			default:
+				return newError(fmt.Sprintf("argument to `len` not supported, got %s", obj.Type()))
+			}
+		},
+	},
+}
+
 func Eval(node ast.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
 	case *ast.Program:
@@ -115,10 +133,15 @@ func evalBlockStatement(block *ast.BlockStatement, env *object.Environment) obje
 
 func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
 	val, ok := env.Get(node.Value)
-	if !ok {
-		return newError(fmt.Sprintf("identifier not found: %s", node.Value))
+	if ok {
+		return val
 	}
-	return val
+
+	if builtin, ok := builtins[node.Value]; ok {
+		return builtin
+	}
+
+	return newError(fmt.Sprintf("identifier not found: %s", node.Value))
 }
 
 func evalPrefixExpression(operator string, right object.Object) object.Object {
@@ -248,22 +271,24 @@ func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Ob
 }
 
 func applyFunction(fn object.Object, args []object.Object) object.Object {
-	function, ok := fn.(*object.Function)
-	if !ok {
+	switch fn := fn.(type) {
+	case *object.Function:
+		params := map[string]object.Object{}
+		for idx, param := range fn.Parameters {
+			params[param.Value] = args[idx]
+		}
+
+		evaluated := Eval(fn.Body, object.NewInnerEnvironment(fn.Env, params))
+		if returnValue, ok := evaluated.(*object.ReturnValue); ok {
+			return returnValue.Value
+		}
+
+		return evaluated
+	case *object.Builtin:
+		return fn.Fn(args...)
+	default:
 		return newError("not a function: %s", fn.Type())
 	}
-
-	params := map[string]object.Object{}
-	for idx, param := range function.Parameters {
-		params[param.Value] = args[idx]
-	}
-
-	evaluated := Eval(function.Body, object.NewInnerEnvironment(function.Env, params))
-	if returnValue, ok := evaluated.(*object.ReturnValue); ok {
-		return returnValue.Value
-	}
-
-	return evaluated
 }
 
 func isTruthy(obj object.Object) bool {
