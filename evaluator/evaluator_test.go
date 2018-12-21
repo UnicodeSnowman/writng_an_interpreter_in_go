@@ -8,6 +8,16 @@ import (
 	"github.com/unicodesnowman/writing_an_interpreter_in_go/parser"
 )
 
+func TestHashLiteral(t *testing.T) {
+	// etc.
+	// { "test": 123 }
+}
+
+func TestHashIndexExpressions(t *testing.T) {
+	// etc.
+	// { "test": 123 }["test"] == 123
+}
+
 func TestEvalIntegerExpression(t *testing.T) {
 	tests := []struct {
 		input    string

@@ -334,6 +334,7 @@ func (al *ArrayLiteral) String() string {
 type IndexExpression struct {
 	Token token.Token // The [ token
 	Left  Expression
+	// TODO could have Right for setting?
 	Index Expression
 }
 
@@ -366,9 +367,9 @@ func (hl *HashLiteral) String() string {
 		pairs = append(pairs, key.String()+":"+value.String())
 	}
 
-	out.WriteString("{")
+	out.WriteString("{ ")
 	out.WriteString(strings.Join(pairs, ", "))
-	out.WriteString("}")
+	out.WriteString(" }")
 
 	return out.String()
 }

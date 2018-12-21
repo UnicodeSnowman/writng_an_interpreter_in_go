@@ -99,6 +99,8 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return evalProgram(node, env)
 	case *ast.ExpressionStatement: // i.e. not a return or let statement
 		return Eval(node.Expression, env)
+	case *ast.HashLiteral:
+		return evalHashLiteral(node, env)
 	case *ast.PrefixExpression:
 		right := Eval(node.Right, env)
 		if isError(right) {
@@ -128,17 +130,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return index
 		}
 
-		switch {
-		case left.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
-			array := left.(*object.Array).Elements
-			index := index.(*object.Integer).Value
-			if index < 0 || index > int64(len(array)-1) {
-				return NULL
-			}
-			return array[index]
-		default:
-			return newError("index operator not supported: %s", left.Type())
-		}
+		return evalIndexExpression(left, index)
 	case *ast.ArrayLiteral:
 		elements := evalExpressions(node.Elements, env)
 		if len(elements) == 1 && isError(elements[0]) {
@@ -205,6 +197,35 @@ func evalProgram(program *ast.Program, env *object.Environment) object.Object {
 	return result
 }
 
+// TODO could have (optional) right for setting array values and hashes?
+func evalIndexExpression(left, index object.Object) object.Object {
+	switch {
+	case left.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
+		array := left.(*object.Array).Elements
+		index := index.(*object.Integer).Value
+		if index < 0 || index > int64(len(array)-1) {
+			return NULL
+		}
+		return array[index]
+	case left.Type() == object.HASH_OBJ:
+		hashObject := left.(*object.Hash)
+
+		key, ok := index.(object.Hashable)
+		if !ok {
+			return newError("unusable as hash key: %s", index.Type())
+		}
+
+		pair, ok := hashObject.Pairs[key.HashKey()]
+		if !ok {
+			return NULL
+		}
+
+		return pair.Value
+	default:
+		return newError("index operator not supported: %s", left.Type())
+	}
+}
+
 func evalBlockStatement(block *ast.BlockStatement, env *object.Environment) object.Object {
 	var result object.Object
 
@@ -232,6 +253,31 @@ func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object
 	}
 
 	return newError(fmt.Sprintf("identifier not found: %s", node.Value))
+}
+
+func evalHashLiteral(node *ast.HashLiteral, env *object.Environment) object.Object {
+	pairs := map[object.HashKey]object.HashPair{}
+
+	for keyNode, valueNode := range node.Pairs {
+		key := Eval(keyNode, env)
+		if isError(key) {
+			return key
+		}
+
+		hashable, ok := key.(object.Hashable)
+		if !ok {
+			return newError("unusable as hash key: %s", key.Type())
+		}
+
+		value := Eval(valueNode, env)
+		if isError(value) {
+			return value
+		}
+
+		pairs[hashable.HashKey()] = object.HashPair{Key: key, Value: value}
+	}
+
+	return &object.Hash{Pairs: pairs}
 }
 
 func evalPrefixExpression(operator string, right object.Object) object.Object {

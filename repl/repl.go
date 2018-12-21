@@ -12,7 +12,7 @@ import (
 	"github.com/unicodesnowman/writing_an_interpreter_in_go/parser"
 )
 
-const PROMPT = ">> "
+const prompt = ">> "
 
 func goodbye(out io.Writer) {
 	fmt.Fprintf(out, "Goodbye!\n")
@@ -24,7 +24,7 @@ func Start(in io.Reader, out io.Writer) {
 	env := object.NewEnvironment()
 
 	for {
-		fmt.Fprint(out, PROMPT)
+		fmt.Fprint(out, prompt)
 
 		// TODO support up/down arrow for scrolling through history
 		// handle automatically via rlwrap?
